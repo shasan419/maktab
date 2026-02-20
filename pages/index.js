@@ -66,40 +66,56 @@ class AudioStreamer {
     this.audio = audioEl;
 
     if (!window.MediaSource || !MediaSource.isTypeSupported(MIME_TYPE)) {
-      console.warn('MediaSource not supported — audio may not play on this browser');
+      console.warn('MediaSource not supported for MIME type:', MIME_TYPE);
       return false;
     }
 
-    this.ms  = new MediaSource();
-    audioEl.src = URL.createObjectURL(this.ms);
-
-    this.ms.addEventListener('sourceopen', () => {
-      try {
-        this.sb = this.ms.addSourceBuffer(MIME_TYPE);
-        this.sb.mode = 'sequence';
-        this.sb.addEventListener('updateend', () => {
-          this.busy = false;
-          this._appendNext();
-        });
-        this.sb.addEventListener('error', (e) => {
-          console.error('SourceBuffer error:', e);
-        });
-      } catch (e) {
-        console.error('SourceBuffer setup error:', e);
-      }
-    }, { once: true });
-
-    // Visualizer
     try {
-      this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const src     = this.audioCtx.createMediaElementSource(audioEl);
-      this.analyser = this.audioCtx.createAnalyser();
-      this.analyser.fftSize = 128;
-      src.connect(this.analyser);
-      this.analyser.connect(this.audioCtx.destination);
-    } catch {}
+      this.ms  = new MediaSource();
+      audioEl.src = URL.createObjectURL(this.ms);
 
-    return true;
+      this.ms.addEventListener('sourceopen', () => {
+        console.log('MediaSource opened, adding SourceBuffer');
+        try {
+          this.sb = this.ms.addSourceBuffer(MIME_TYPE);
+          this.sb.mode = 'sequence';
+          this.sb.addEventListener('updateend', () => {
+            this.busy = false;
+            this._appendNext();
+          });
+          this.sb.addEventListener('error', (e) => {
+            console.error('SourceBuffer error:', e);
+          });
+        } catch (e) {
+          console.error('SourceBuffer setup error:', e);
+        }
+      }, { once: true });
+
+      this.ms.addEventListener('sourceended', () => {
+        console.log('MediaSource ended');
+      });
+
+      this.ms.addEventListener('error', (e) => {
+        console.error('MediaSource error:', e);
+      });
+
+      // Visualizer
+      try {
+        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const src     = this.audioCtx.createMediaElementSource(audioEl);
+        this.analyser = this.audioCtx.createAnalyser();
+        this.analyser.fftSize = 128;
+        src.connect(this.analyser);
+        this.analyser.connect(this.audioCtx.destination);
+      } catch (e) {
+        console.warn('Visualizer setup failed:', e);
+      }
+
+      return true;
+    } catch (e) {
+      console.error('Failed to initialize audio streamer:', e);
+      return false;
+    }
   }
 
   resumeContext() {
@@ -107,23 +123,38 @@ class AudioStreamer {
   }
 
   push(arrayBuffer) {
+    if (!this.sb) {
+      console.warn('SourceBuffer not ready yet, queueing data');
+    }
     this.queue.push(arrayBuffer);
     this._appendNext();
   }
 
   _appendNext() {
     if (this.busy || this.queue.length === 0 || !this.sb || this.sb.updating) return;
+    
+    if (this.ms?.readyState !== 'open') {
+      console.warn('MediaSource not ready yet, deferring append');
+      return;
+    }
+
     this.busy = true;
     try {
       const chunk = this.queue.shift();
+      console.log('Appending chunk:', chunk.byteLength, 'bytes');
       this.sb.appendBuffer(chunk);
     } catch (e) {
       this.busy = false;
       console.error('Failed to append buffer:', e.name, e.message);
-      if (e.name === 'QuotaExceededError') this._evict();
-      // Continue processing queue even on error
-      if (this.queue.length > 0) {
-        setTimeout(() => this._appendNext(), 100);
+      
+      if (e.name === 'QuotaExceededError') {
+        this._evict();
+      } else if (e.name === 'InvalidStateError') {
+        console.error('SourceBuffer is in invalid state, skipping this chunk');
+        // Continue with next chunk
+        if (this.queue.length > 0) {
+          setTimeout(() => this._appendNext(), 50);
+        }
       }
     }
   }
@@ -150,11 +181,35 @@ class AudioStreamer {
   }
 
   destroy() {
+    console.log('Destroying AudioStreamer');
     this.queue = [];
-    try { this.audioCtx?.close(); } catch {}
+    
     try {
-      if (this.ms && this.ms.readyState === 'open') this.ms.endOfStream();
+      if (this.sb && this.ms?.readyState === 'open') {
+        const buffers = this.ms.sourceBuffers;
+        while (buffers.length > 0) {
+          this.ms.removeSourceBuffer(buffers[0]);
+        }
+      }
+    } catch (e) {
+      console.error('Error removing SourceBuffer:', e);
+    }
+
+    try {
+      if (this.ms && this.ms.readyState !== 'closed') {
+        this.ms.endOfStream?.();
+      }
+    } catch (e) {
+      console.error('Error ending MediaSource:', e);
+    }
+
+    try { 
+      this.audioCtx?.close(); 
     } catch {}
+
+    this.sb = null;
+    this.ms = null;
+    this.audio = null;
   }
 }
 
@@ -227,34 +282,60 @@ export default function Home() {
 
   // ── Init/start audio player ──────────────────────────────────────────────
   const initStreamer = useCallback(() => {
-    if (!audioRef.current) return false;
-    if (streamerRef.current) {
-      streamerRef.current.destroy();
+    if (!audioRef.current) {
+      console.error('Audio element not available');
+      return false;
     }
-    const s = new AudioStreamer();
-    const ok = s.init(audioRef.current);
-    streamerRef.current = s;
-    return ok;
+
+    // Destroy old streamer
+    if (streamerRef.current) {
+      console.log('Destroying old streamer');
+      streamerRef.current.destroy();
+      streamerRef.current = null;
+    }
+
+    // Small delay to ensure old MediaSource is cleaned up
+    setTimeout(() => {
+      try {
+        const s = new AudioStreamer();
+        const ok = s.init(audioRef.current);
+        if (ok) {
+          streamerRef.current = s;
+          console.log('New streamer initialized');
+        } else {
+          console.error('AudioStreamer init failed');
+        }
+      } catch (e) {
+        console.error('Failed to create new AudioStreamer:', e);
+      }
+    }, 100);
+
+    return true;
   }, []);
 
   const startPlaying = useCallback(() => {
-    const ok = initStreamer();
-    if (!ok) {
-      console.error('Failed to initialize audio streamer');
-      setAzanState('error');
-      return;
-    }
-    streamerRef.current?.resumeContext();
-    if (audioRef.current) {
-      audioRef.current.volume = volume / 100;
-      audioRef.current.muted  = isMuted;
-      audioRef.current.play().catch((err) => {
-        console.error('Audio play failed:', err);
+    initStreamer();
+    
+    // Wait for streamer to be initialized
+    setTimeout(() => {
+      if (!streamerRef.current) {
+        console.error('Streamer initialization failed');
         setAzanState('error');
-      });
-    }
-    setAzanState('live');
-    startVizTick();
+        return;
+      }
+
+      streamerRef.current.resumeContext();
+      if (audioRef.current) {
+        audioRef.current.volume = volume / 100;
+        audioRef.current.muted  = isMuted;
+        audioRef.current.play().catch((err) => {
+          console.error('Audio play failed:', err);
+          setAzanState('error');
+        });
+      }
+      setAzanState('live');
+      startVizTick();
+    }, 150);
   }, [initStreamer, volume, isMuted, startVizTick]);
 
   const stopPlaying = useCallback(() => {
