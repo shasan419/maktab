@@ -82,8 +82,14 @@ class AudioStreamer {
       return;
     }
     
-    if (!this.audioCtx.createAudioBuffer) {
-      console.error('AudioContext missing createAudioBuffer method');
+    // Debug: log what we actually have
+    console.log('_processQueue: this.audioCtx type:', typeof this.audioCtx, 'constructor:', this.audioCtx?.constructor?.name);
+    console.log('_processQueue: has createAudioBuffer?', typeof this.audioCtx?.createAudioBuffer);
+    console.log('_processQueue: has destination?', !!this.audioCtx?.destination);
+    console.log('_processQueue: has createBufferSource?', typeof this.audioCtx?.createBufferSource);
+    
+    if (!this.audioCtx.createBuffer) {
+      console.error('AudioContext missing createBuffer method. Object:', this.audioCtx);
       return;
     }
     
@@ -92,7 +98,7 @@ class AudioStreamer {
       const totalSamples = this.queue.reduce((sum, chunk) => sum + chunk.length, 0);
       console.log('Creating AudioBuffer with', totalSamples, 'samples');
       
-      const audioBuffer = this.audioCtx.createAudioBuffer(1, totalSamples, 48000);
+      const audioBuffer = this.audioCtx.createBuffer(1, totalSamples, 48000);
       const channelData = audioBuffer.getChannelData(0);
       
       let offset = 0;
