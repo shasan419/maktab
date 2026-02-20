@@ -170,6 +170,14 @@ export default function Home() {
     }
   }, []);
 
+  // ── Sync volume and muted state to audio element ─────────────────────────
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume / 100;
+      audioRef.current.muted = isMuted;
+    }
+  }, [volume, isMuted]);
+
   useEffect(() => {
     if (timings) setNextPrayer(getNextPrayer(timings));
   }, [timings, now?.getMinutes()]);
@@ -254,18 +262,11 @@ export default function Home() {
       }
 
       streamerRef.current.resumeContext();
-      if (audioRef.current) {
-        audioRef.current.volume = volume / 100;
-        audioRef.current.muted  = isMuted;
-        audioRef.current.play().catch((err) => {
-          console.error('Audio play failed:', err);
-          setAzanState('error');
-        });
-      }
       setAzanState('live');
       startVizTick();
+      console.log('Listening mode activated, waiting for audio source...');
     }, 150);
-  }, [initStreamer, volume, isMuted, startVizTick]);
+  }, [initStreamer, startVizTick]);
 
   const stopPlaying = useCallback(() => {
     cancelAnimationFrame(animRef.current);
