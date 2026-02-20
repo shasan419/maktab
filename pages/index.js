@@ -46,11 +46,13 @@ class AudioStreamer {
     this.audioCtx = audioCtx;
     this.queue = [];
     this.analyser = audioCtx?.analyser;
+    this.audioEl = null;
+    console.log('AudioStreamer created with audioCtx:', audioCtx ? 'present' : 'MISSING');
   }
 
   init(audioEl) {
     // PCM doesn't use HTML audio element - we decode directly to AudioContext
-    console.log('PCM audio streamer initialized');
+    console.log('PCM audio streamer init, audioCtx available:', this.audioCtx ? 'YES' : 'NO');
     this.audioEl = audioEl;
     return true;
   }
@@ -65,21 +67,31 @@ class AudioStreamer {
   push(pcmBuffer) {
     // Buffer is raw Int16 PCM data
     this.queue.push(new Int16Array(pcmBuffer));
-    console.log('Queued PCM chunk:', pcmBuffer.byteLength, 'bytes');
+    console.log('Queued PCM chunk:', pcmBuffer.byteLength, 'bytes, queue length:', this.queue.length);
     this._processQueue();
   }
 
   _processQueue() {
-    if (this.queue.length === 0) return;
+    if (this.queue.length === 0) {
+      console.log('Queue empty');
+      return;
+    }
     
-    if (!this.audioCtx || !this.audioCtx.createAudioBuffer) {
-      console.error('AudioContext not available for playback');
+    if (!this.audioCtx) {
+      console.warn('AudioContext not available yet, buffering', this.queue.length, 'chunks');
+      return;
+    }
+    
+    if (!this.audioCtx.createAudioBuffer) {
+      console.error('AudioContext missing createAudioBuffer method');
       return;
     }
     
     try {
       // Decode queued PCM chunks into AudioBuffer
       const totalSamples = this.queue.reduce((sum, chunk) => sum + chunk.length, 0);
+      console.log('Creating AudioBuffer with', totalSamples, 'samples');
+      
       const audioBuffer = this.audioCtx.createAudioBuffer(1, totalSamples, 48000);
       const channelData = audioBuffer.getChannelData(0);
       
@@ -238,73 +250,69 @@ export default function Home() {
 
     // Ensure AudioContext is initialized
     if (!audioCtxRef.current) {
-      console.log('AudioContext not yet initialized, creating now...');
+      console.log('Creating AudioContext...');
       try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 128;
+        analyser.fftSize = 2048;
+        analyser.connect(audioCtx.destination);
         audioCtx.analyser = analyser;
         audioCtxRef.current = audioCtx;
-        console.log('AudioContext initialized in initStreamer');
+        console.log('AudioContext created, state:', audioCtx.state);
       } catch (e) {
         console.error('Failed to create AudioContext:', e);
         return false;
       }
     }
 
-    // Destroy old streamer
+    // Resume if suspended
+    if (audioCtxRef.current.state === 'suspended') {
+      console.log('Resuming AudioContext...');
+      audioCtxRef.current.resume().then(() => {
+        console.log('AudioContext resumed');
+      });
+    }
+
+    // Create streamer synchronously (no setTimeout delay)
     if (streamerRef.current) {
       console.log('Destroying old streamer');
       streamerRef.current.destroy();
-      streamerRef.current = null;
     }
 
-    // Small delay to ensure old streamer is cleaned up
-    setTimeout(() => {
-      try {
-        console.log('Creating new AudioStreamer with audioCtx:', audioCtxRef.current ? 'available' : 'NOT available');
-        const s = new AudioStreamer(audioCtxRef.current);
-        const ok = s.init(audioRef.current);
-        if (ok) {
-          streamerRef.current = s;
-          console.log('New streamer initialized');
-        } else {
-          console.error('AudioStreamer init failed');
-        }
-      } catch (e) {
-        console.error('Failed to create new AudioStreamer:', e);
-      }
-    }, 100);
+    try {
+      console.log('Creating new AudioStreamer, audioCtx available:', audioCtxRef.current ? 'YES' : 'NO');
+      const s = new AudioStreamer(audioCtxRef.current);
+      s.init(audioRef.current);
+      streamerRef.current = s;
+      console.log('AudioStreamer ready for audio playback');
+    } catch (e) {
+      console.error('Failed to create AudioStreamer:', e);
+      return false;
+    }
 
     return true;
   }, []);
 
   const startPlaying = useCallback(() => {
-    initStreamer();
+    const ok = initStreamer();
     
-    // Wait for streamer to be initialized
-    setTimeout(() => {
-      if (!streamerRef.current) {
-        console.error('Streamer initialization failed');
-        setAzanState('error');
-        return;
-      }
+    if (!ok || !streamerRef.current) {
+      console.error('Failed to initialize streamer');
+      setAzanState('error');
+      return;
+    }
 
-      if (audioRef.current) {
-        console.log('Audio element state:', {
-          paused: audioRef.current.paused,
-          src: audioRef.current.src ? 'set' : 'empty',
-          volume: audioRef.current.volume,
-          muted: audioRef.current.muted,
-          autoplay: audioRef.current.autoplay
-        });
-      }
+    if (audioRef.current) {
+      console.log('Audio element ready:', {
+        paused: audioRef.current.paused,
+        volume: audioRef.current.volume,
+      });
+    }
 
-      streamerRef.current.resumeContext();
-      setAzanState('live');
-      startVizTick();
-      console.log('Listening mode activated, waiting for audio source...');
-    }, 150);
+    streamerRef.current.resumeContext();
+    setAzanState('live');
+    startVizTick();
+    console.log('🎧 Listening mode activated - ready to receive audio');
   }, [initStreamer, startVizTick]);
 
   const stopPlaying = useCallback(() => {
@@ -363,7 +371,10 @@ export default function Home() {
       // ── Binary audio chunk → push to streamer ──
       if (e.data instanceof ArrayBuffer) {
         if (streamerRef.current) {
+          console.log('Feeding audio chunk to streamer:', e.data.byteLength, 'bytes');
           streamerRef.current.push(e.data);
+        } else {
+          console.warn('Streamer not ready, audio chunk discarded');
         }
         return;
       }
