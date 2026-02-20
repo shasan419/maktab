@@ -43,28 +43,15 @@ function getWsUrl() {
 
 // ── Simple audio player using blob accumulation ──────────────────────────────
 class AudioStreamer {
-  constructor() {
+  constructor(audioCtx) {
     this.chunks = [];
     this.audio = null;
-    this.analyser = null;
-    this.audioCtx = null;
+    this.audioCtx = audioCtx;
   }
 
   init(audioEl) {
     this.audio = audioEl;
-    
-    try {
-      this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const src = this.audioCtx.createMediaElementSource(audioEl);
-      this.analyser = this.audioCtx.createAnalyser();
-      this.analyser.fftSize = 128;
-      src.connect(this.analyser);
-      this.analyser.connect(this.audioCtx.destination);
-      console.log('Audio context initialized');
-    } catch (e) {
-      console.warn('Visualizer setup failed:', e);
-    }
-
+    console.log('Audio streamer initialized');
     return true;
   }
 
@@ -110,9 +97,9 @@ class AudioStreamer {
   }
 
   getLevel() {
-    if (!this.analyser) return 0;
-    const d = new Uint8Array(this.analyser.frequencyBinCount);
-    this.analyser.getByteTimeDomainData(d);
+    if (!this.audioCtx?.analyser) return 0;
+    const d = new Uint8Array(this.audioCtx.analyser.frequencyBinCount);
+    this.audioCtx.analyser.getByteTimeDomainData(d);
     const max = Math.max(...d.map(v => Math.abs(v - 128)));
     return Math.min(100, (max / 128) * 260);
   }
@@ -129,12 +116,7 @@ class AudioStreamer {
       this.audio.pause();
     }
 
-    try {
-      this.audioCtx?.close();
-    } catch {}
-
     this.audio = null;
-    this.audioCtx = null;
   }
 }
 
@@ -157,6 +139,7 @@ export default function Home() {
   const streamerRef  = useRef(null);
   const retryRef     = useRef(null);
   const animRef      = useRef(null);
+  const audioCtxRef  = useRef(null);
   const hasInteracted = useRef(false);
 
   // ── Clock ────────────────────────────────────────────────────────────────
@@ -164,6 +147,27 @@ export default function Home() {
     setNow(new Date());
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
+  }, []);
+
+  // ── Initialize audio context once on mount ──────────────────────────────
+  useEffect(() => {
+    if (typeof window === 'undefined' || audioCtxRef.current) return;
+
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioRef.current) {
+        const src = audioCtx.createMediaElementSource(audioRef.current);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 128;
+        src.connect(analyser);
+        analyser.connect(audioCtx.destination);
+        audioCtx.analyser = analyser;
+        audioCtxRef.current = audioCtx;
+        console.log('Audio context created and ready');
+      }
+    } catch (e) {
+      console.warn('Audio context setup failed:', e);
+    }
   }, []);
 
   useEffect(() => {
@@ -219,10 +223,10 @@ export default function Home() {
       streamerRef.current = null;
     }
 
-    // Small delay to ensure old MediaSource is cleaned up
+    // Small delay to ensure old streamer is cleaned up
     setTimeout(() => {
       try {
-        const s = new AudioStreamer();
+        const s = new AudioStreamer(audioCtxRef.current);
         const ok = s.init(audioRef.current);
         if (ok) {
           streamerRef.current = s;
