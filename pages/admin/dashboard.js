@@ -54,6 +54,7 @@ export default function Dashboard() {
   const recorderRef = useRef(null);
   const animRef     = useRef(null);
   const analyserRef = useRef(null);
+  const dataRequestIntervalRef = useRef(null);
 
   // ── Auth guard ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -182,8 +183,17 @@ export default function Dashboard() {
               stopBroadcast();
             };
 
-            // 250ms timeslice = good latency without too many messages
-            recorder.start(250);
+            // Start recording WITHOUT timeslices, then manually request data
+            // This gives us more complete audio chunks that concatenate better
+            recorder.start();
+            
+            // Request data every 500ms instead of using timeslices
+            dataRequestIntervalRef.current = setInterval(() => {
+              if (recorderRef.current?.state === 'recording') {
+                recorderRef.current.requestData();
+              }
+            }, 500);
+            
             startViz(stream);
             setBcastState('live');
             console.log('Recording started successfully');
@@ -216,6 +226,12 @@ export default function Dashboard() {
   // ── Stop broadcast ──────────────────────────────────────────────────────
   const stopBroadcast = useCallback(() => {
     setBcastState('stopping');
+
+    // Stop data request interval
+    if (dataRequestIntervalRef.current) {
+      clearInterval(dataRequestIntervalRef.current);
+      dataRequestIntervalRef.current = null;
+    }
 
     // Stop recorder
     try {

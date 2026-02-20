@@ -70,7 +70,37 @@ class AudioStreamer {
     this.chunks.push(new Uint8Array(arrayBuffer));
     const total = this.chunks.reduce((a, c) => a + c.length, 0);
     console.log('Queued chunk:', arrayBuffer.byteLength, 'bytes (total:', total, 'bytes)');
-    this._updateAudioSource();
+    
+    // Only update audio source when we have a reasonable amount of data
+    // For WebM, we need at least one complete frame/cluster
+    if (total > 10000) {
+      this._updateAudioSource();
+    }
+  }
+
+  _updateAudioSource() {
+    try {
+      // For streaming audio, just use all accumulated chunks as-is
+      // This works best with continuous single-file encoding (no timeslices)
+      const totalLength = this.chunks.reduce((a, c) => a + c.length, 0);
+      const combined = new Uint8Array(totalLength);
+      let offset = 0;
+      for (const chunk of this.chunks) {
+        combined.set(chunk, offset);
+        offset += chunk.length;
+      }
+      
+      const blob = new Blob([combined], { type: 'audio/webm' });
+      const url = URL.createObjectURL(blob);
+      
+      // Only set src if it changed
+      if (this.audio.src !== url) {
+        console.log('Setting audio source:', totalLength, 'bytes');
+        this.audio.src = url;
+      }
+    } catch (e) {
+      console.error('Error updating audio source:', e);
+    }
   }
 
   _updateAudioSource() {
