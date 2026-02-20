@@ -1,0 +1,368 @@
+.page {
+  max-width: 580px;
+  margin: 0 auto;
+  padding: 0 1.2rem 5rem;
+  animation: fadeUp 0.45s ease both;
+}
+
+/* ── Header ── */
+.header {
+  text-align: center;
+  padding: 2.25rem 0 1.5rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.4rem;
+}
+.headerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.adminBtn {
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  color: var(--cream-dk);
+  border: 1px solid var(--border);
+  padding: 0.28rem 0.7rem;
+  border-radius: 5px;
+  transition: all 0.2s;
+}
+.adminBtn:hover { color: var(--gold); border-color: var(--border2); }
+
+.siteName {
+  font-size: 1.9rem;
+  color: var(--cream);
+  letter-spacing: 0.04em;
+  margin-bottom: 0.4rem;
+  text-shadow: 0 2px 24px rgba(212,168,67,0.12);
+}
+.tagline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  font-size: 0.76rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cream-dk);
+}
+.gem { color: var(--gold-dk); font-size: 0.6rem; }
+
+/* ── Clock ── */
+.clockCard {
+  background: linear-gradient(135deg, rgba(15,35,24,0.85), rgba(11,26,20,0.95));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.4rem 1.5rem;
+  text-align: center;
+  margin-bottom: 1.1rem;
+}
+.clock {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 3.2rem;
+  font-weight: 600;
+  color: var(--gold-lt);
+  letter-spacing: 0.06em;
+  line-height: 1;
+  animation: glow 4s ease-in-out infinite alternate;
+}
+.date {
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cream-md);
+  margin-top: 0.4rem;
+}
+.connRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+.connDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.connOk  { background: var(--green-lt); animation: livePulse 2s ease-in-out infinite; }
+.connOff { background: var(--cream-dk); opacity: 0.5; }
+.connLabel { font-size: 0.68rem; letter-spacing: 0.1em; color: var(--cream-dk); text-transform: uppercase; }
+
+/* ── Azan Banner ── */
+.azanBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, rgba(22,60,38,0.9), rgba(15,35,24,0.95));
+  border: 1px solid rgba(61,175,114,0.35);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.1rem;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  animation: fadeUp 0.3s ease;
+}
+.azanBanner:hover { border-color: rgba(61,175,114,0.6); }
+
+.bannerLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.liveDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--green-lt);
+  flex-shrink: 0;
+  animation: livePulse 1.3s ease-in-out infinite;
+}
+.bannerTitle  { font-size: 0.95rem; font-weight: 600; color: var(--green-lt); }
+.bannerSub    { font-size: 0.72rem; color: var(--cream-md); margin-top: 0.1rem; }
+
+.listenBtn {
+  background: var(--green);
+  color: white;
+  padding: 0.45rem 1.1rem;
+  border-radius: 7px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+.listenBtn:hover { background: var(--green-lt); }
+
+/* ── Player / Visualizer ── */
+.playerCard {
+  background: linear-gradient(135deg, rgba(11,26,20,0.97), rgba(15,35,24,0.9));
+  border: 1px solid rgba(61,175,114,0.25);
+  border-radius: 14px;
+  padding: 1.25rem;
+  margin-bottom: 1.1rem;
+  animation: fadeUp 0.3s ease;
+}
+.playerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+.liveChip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+  color: var(--red);
+  border: 1px solid rgba(192,57,43,0.35);
+  background: rgba(192,57,43,0.08);
+  padding: 0.22rem 0.65rem;
+  border-radius: 100px;
+}
+.liveDotRed {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+  animation: redPulse 1.2s ease-in-out infinite;
+}
+
+.visualizer {
+  height: 80px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  overflow: hidden;
+  margin-bottom: 0.85rem;
+}
+.vBar {
+  flex: 1;
+  max-width: 13px;
+  background: linear-gradient(to top, var(--green), var(--green-lt));
+  border-radius: 2px 2px 0 0;
+  transition: height 0.08s ease;
+  min-height: 4px;
+}
+
+.playerControls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.muteBtn {
+  font-size: 1.1rem;
+  background: transparent;
+  padding: 0.15rem 0.3rem;
+  border-radius: 4px;
+  transition: opacity 0.2s;
+}
+.muteBtn:hover { opacity: 0.7; }
+.mutedOn { opacity: 0.5; }
+
+.volSlider {
+  flex: 1;
+  -webkit-appearance: none;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(61,175,114,0.25);
+  outline: none;
+  cursor: pointer;
+}
+.volSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--green-lt);
+  cursor: pointer;
+}
+.volPct {
+  font-size: 0.75rem;
+  color: var(--cream-dk);
+  font-family: 'Cormorant Garamond', serif;
+  min-width: 2.8rem;
+  text-align: right;
+}
+
+/* ── Section label ── */
+.sectionLabel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  text-align: center;
+  margin-bottom: 0.85rem;
+}
+.sectionEn {
+  font-size: 0.68rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cream-dk);
+}
+
+/* ── Ramadan ── */
+.ramadanCard {
+  background: linear-gradient(135deg, rgba(15,35,24,0.85), rgba(11,26,20,0.95));
+  border: 1px solid rgba(212,168,67,0.18);
+  border-radius: 13px;
+  padding: 1.25rem;
+  margin-bottom: 1.1rem;
+}
+.ramGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+}
+.ramItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  background: rgba(6,14,11,0.6);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.1rem 0.75rem;
+}
+.ramIftar { border-color: rgba(212,168,67,0.22); }
+.ramIcon  { font-size: 1.6rem; }
+.ramName  { font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--cream-md); }
+.ramTime  {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: var(--gold-lt);
+}
+
+/* ── Prayer List ── */
+.prayersSection { margin-bottom: 2rem; }
+
+.prayerList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.pRow {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.85rem 1.1rem;
+  background: linear-gradient(135deg, rgba(15,35,24,0.7), rgba(11,26,20,0.9));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.22s;
+}
+.pRow::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--gold-dim);
+  transform: scaleY(0);
+  transition: transform 0.22s;
+}
+.pRow:hover { border-color: var(--border2); }
+.pRow:hover::before { transform: scaleY(1); }
+
+.pRowNext {
+  border-color: rgba(212,168,67,0.38) !important;
+  background: linear-gradient(135deg, rgba(22,56,36,0.9), rgba(15,35,24,0.97)) !important;
+  box-shadow: 0 4px 24px rgba(212,168,67,0.07);
+}
+.pRowNext::before { transform: scaleY(1) !important; background: var(--gold) !important; }
+
+.nextTag {
+  position: absolute;
+  top: 0; right: 0;
+  background: var(--gold-dk);
+  color: var(--forest);
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 700;
+  padding: 0.12rem 0.5rem;
+  border-radius: 0 10px 0 6px;
+}
+.pIcon  { font-size: 1.3rem; width: 1.8rem; text-align: center; flex-shrink: 0; }
+.pNames { flex: 1; display: flex; flex-direction: column; gap: 0.08rem; }
+.pArabic { font-size: 1rem; color: var(--gold-dim); line-height: 1.2; }
+.pLabel  { font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--cream-md); }
+.pTime   {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--cream);
+  letter-spacing: 0.02em;
+}
+.pTimeNext { color: var(--gold-lt); }
+
+/* ── Loading ── */
+.loading { display: flex; justify-content: center; padding: 2rem; }
+.spinner {
+  width: 26px; height: 26px;
+  border: 2px solid var(--border);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+/* ── Footer ── */
+.footer {
+  text-align: center;
+  padding: 1.5rem 0;
+  border-top: 1px solid var(--border);
+}
+.footerNote {
+  font-size: 0.68rem;
+  color: var(--cream-dk);
+  margin-top: 0.4rem;
+  letter-spacing: 0.04em;
+}
+
+/* Arabic util */
+.arabic { font-family: 'Scheherazade New', serif; direction: rtl; }

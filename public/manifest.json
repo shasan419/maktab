@@ -1,0 +1,14 @@
+{
+  "name": "Maktab e Ahle Sunnat",
+  "short_name": "Maktab",
+  "description": "Prayer timings, Sehri & Iftar, and live Azan",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#060e0b",
+  "theme_color": "#d4a843",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

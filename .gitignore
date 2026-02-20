@@ -1,0 +1,16 @@
+node_modules/
+.next/
+out/
+
+# Environment — NEVER commit
+.env.local
+.env.*.local
+
+# PWA generated
+public/sw.js
+public/workbox-*.js
+public/worker-*.js
+public/fallback-*.js
+
+.DS_Store
+npm-debug.log*
