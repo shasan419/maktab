@@ -90,6 +90,14 @@ class AudioStreamer {
       if (this.audio.src !== url) {
         console.log('Updating audio source with', totalLength, 'bytes');
         this.audio.src = url;
+        
+        // Try to play if we have enough data (at least 50KB)
+        if (totalLength > 50000 && this.audio.paused) {
+          console.log('Attempting to play audio...');
+          this.audio.play().catch(err => {
+            console.warn('Autoplay blocked or failed:', err.message);
+          });
+        }
       }
     } catch (e) {
       console.error('Error updating audio source:', e);
@@ -259,6 +267,16 @@ export default function Home() {
         console.error('Streamer initialization failed');
         setAzanState('error');
         return;
+      }
+
+      if (audioRef.current) {
+        console.log('Audio element state:', {
+          paused: audioRef.current.paused,
+          src: audioRef.current.src ? 'set' : 'empty',
+          volume: audioRef.current.volume,
+          muted: audioRef.current.muted,
+          autoplay: audioRef.current.autoplay
+        });
       }
 
       streamerRef.current.resumeContext();
