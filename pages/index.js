@@ -5,13 +5,14 @@ import styles from './index.module.css';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const MIME_TYPES   = [
+  'audio/wav',
   'audio/webm;codecs=opus',
   'audio/webm',
-  'audio/mp4',
 ];
-let MIME_TYPE = MIME_TYPES[0]; // default
+let MIME_TYPE = MIME_TYPES[0]; // default to WAV
 if (typeof window !== 'undefined' && window.MediaSource) {
   MIME_TYPE = MIME_TYPES.find(m => MediaSource.isTypeSupported(m)) || MIME_TYPES[0];
+  console.log('Listener using MIME type:', MIME_TYPE);
 }
 const POLL_MS      = 4000;   // how often to check connection health
 const RETRY_MS     = 3000;   // reconnect delay after disconnect
@@ -60,6 +61,7 @@ class AudioStreamer {
     this.started  = false;
     this.analyser = null;
     this.audioCtx = null;
+    this.headerSent = false;
   }
 
   init(audioEl) {
@@ -126,7 +128,27 @@ class AudioStreamer {
     if (!this.sb) {
       console.warn('SourceBuffer not ready yet, queueing data');
     }
-    this.queue.push(arrayBuffer);
+    
+    // For WAV format: only use the first chunk's header, strip headers from rest
+    if (MIME_TYPE === 'audio/wav') {
+      if (!this.headerSent && arrayBuffer.byteLength > 0) {
+        // First chunk - include full WAV data (header + audio)
+        this.queue.push(arrayBuffer);
+        this.headerSent = true;
+        console.log('Queued WAV header chunk:', arrayBuffer.byteLength, 'bytes');
+      } else if (this.headerSent) {
+        // Subsequent chunks - try to strip WAV header (first 44 bytes)
+        if (arrayBuffer.byteLength > 44) {
+          const audioData = arrayBuffer.slice(44);
+          this.queue.push(audioData);
+          console.log('Queued WAV audio data chunk:', audioData.byteLength, 'bytes (header stripped)');
+        }
+      }
+    } else {
+      // For other formats, queue as-is
+      this.queue.push(arrayBuffer);
+    }
+    
     this._appendNext();
   }
 
@@ -183,6 +205,7 @@ class AudioStreamer {
   destroy() {
     console.log('Destroying AudioStreamer');
     this.queue = [];
+    this.headerSent = false;
     
     try {
       if (this.sb && this.ms?.readyState === 'open') {

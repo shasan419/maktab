@@ -15,16 +15,14 @@ const PRAYER_FIELDS = [
 ];
 
 const MIME_TYPES = [
+  'audio/wav',
   'audio/webm;codecs=opus',
   'audio/webm',
-  'audio/mp4',
 ];
-let MIME_TYPE = MIME_TYPES[0]; // default
+let MIME_TYPE = MIME_TYPES[0]; // default to WAV
 if (typeof window !== 'undefined' && window.MediaRecorder) {
   MIME_TYPE = MIME_TYPES.find(m => MediaRecorder.isTypeSupported?.(m)) || MIME_TYPES[0];
-}
-if (typeof window !== 'undefined') {
-  console.log('Using MIME type for recording:', MIME_TYPE);
+  console.log('Broadcaster using MIME type for recording:', MIME_TYPE);
 }
 
 function getWsUrl() {
