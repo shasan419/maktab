@@ -14,16 +14,7 @@ const PRAYER_FIELDS = [
   { key:'jumuah',  label:"Jumu'ah",  arabic:'الجمعة' },
 ];
 
-const MIME_TYPES = [
-  'audio/wav',
-  'audio/webm;codecs=opus',
-  'audio/webm',
-];
-let MIME_TYPE = MIME_TYPES[0]; // default to WAV
-if (typeof window !== 'undefined' && window.MediaRecorder) {
-  MIME_TYPE = MIME_TYPES.find(m => MediaRecorder.isTypeSupported?.(m)) || MIME_TYPES[0];
-  console.log('Broadcaster using MIME type for recording:', MIME_TYPE);
-}
+const MIME_TYPE = 'audio/webm;codecs=opus';
 
 function getWsUrl() {
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
@@ -156,14 +147,8 @@ export default function Dashboard() {
         const msg = JSON.parse(e.data);
         if (msg.type === 'ready') {
           // Server confirmed — start MediaRecorder
-          console.log('Attempting to record with MIME type:', MIME_TYPE);
-          if (!MediaRecorder.isTypeSupported(MIME_TYPE)) {
-            console.error('MIME type not supported:', MIME_TYPE);
-            alert('This browser does not support the required audio format. Use Chrome or Firefox.');
-            stopBroadcast();
-            return;
-          }
-
+          console.log('Starting MediaRecorder with MIME type:', MIME_TYPE);
+          
           try {
             const recorder = new MediaRecorder(stream, {
               mimeType: MIME_TYPE,
@@ -174,7 +159,7 @@ export default function Dashboard() {
             recorder.ondataavailable = async (ev) => {
               if (ev.data.size > 0 && ws.readyState === WebSocket.OPEN) {
                 const buf = await ev.data.arrayBuffer();
-                console.log('Sending audio chunk:', buf.byteLength, 'bytes');
+                console.log('Broadcasting audio chunk:', buf.byteLength, 'bytes');
                 ws.send(buf);
               }
             };
@@ -188,7 +173,7 @@ export default function Dashboard() {
             recorder.start(250);
             startViz(stream);
             setBcastState('live');
-            console.log('Recording started');
+            console.log('Recording started successfully');
           } catch (e) {
             console.error('Failed to create MediaRecorder:', e);
             alert('Could not start recording: ' + e.message);

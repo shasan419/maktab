@@ -4,16 +4,7 @@ import Link from 'next/link';
 import styles from './index.module.css';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const MIME_TYPES   = [
-  'audio/wav',
-  'audio/webm;codecs=opus',
-  'audio/webm',
-];
-let MIME_TYPE = MIME_TYPES[0]; // default to WAV
-if (typeof window !== 'undefined' && window.MediaSource) {
-  MIME_TYPE = MIME_TYPES.find(m => MediaSource.isTypeSupported(m)) || MIME_TYPES[0];
-  console.log('Listener using MIME type:', MIME_TYPE);
-}
+const MIME_TYPE    = 'audio/webm;codecs=opus';
 const POLL_MS      = 4000;   // how often to check connection health
 const RETRY_MS     = 3000;   // reconnect delay after disconnect
 
@@ -50,147 +41,71 @@ function getWsUrl() {
   return `${proto}://${window.location.host}/ws`;
 }
 
-// ── MediaSource player ────────────────────────────────────────────────────────
+// ── Simple audio player using blob accumulation ──────────────────────────────
 class AudioStreamer {
   constructor() {
-    this.ms       = null;
-    this.sb       = null;
-    this.queue    = [];
-    this.busy     = false;
-    this.audio    = null;
-    this.started  = false;
+    this.chunks = [];
+    this.audio = null;
     this.analyser = null;
     this.audioCtx = null;
-    this.headerSent = false;
   }
 
   init(audioEl) {
     this.audio = audioEl;
-
-    if (!window.MediaSource || !MediaSource.isTypeSupported(MIME_TYPE)) {
-      console.warn('MediaSource not supported for MIME type:', MIME_TYPE);
-      return false;
-    }
-
+    
     try {
-      this.ms  = new MediaSource();
-      audioEl.src = URL.createObjectURL(this.ms);
-
-      this.ms.addEventListener('sourceopen', () => {
-        console.log('MediaSource opened, adding SourceBuffer');
-        try {
-          this.sb = this.ms.addSourceBuffer(MIME_TYPE);
-          this.sb.mode = 'sequence';
-          this.sb.addEventListener('updateend', () => {
-            this.busy = false;
-            this._appendNext();
-          });
-          this.sb.addEventListener('error', (e) => {
-            console.error('SourceBuffer error:', e);
-          });
-        } catch (e) {
-          console.error('SourceBuffer setup error:', e);
-        }
-      }, { once: true });
-
-      this.ms.addEventListener('sourceended', () => {
-        console.log('MediaSource ended');
-      });
-
-      this.ms.addEventListener('error', (e) => {
-        console.error('MediaSource error:', e);
-      });
-
-      // Visualizer
-      try {
-        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const src     = this.audioCtx.createMediaElementSource(audioEl);
-        this.analyser = this.audioCtx.createAnalyser();
-        this.analyser.fftSize = 128;
-        src.connect(this.analyser);
-        this.analyser.connect(this.audioCtx.destination);
-      } catch (e) {
-        console.warn('Visualizer setup failed:', e);
-      }
-
-      return true;
+      this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const src = this.audioCtx.createMediaElementSource(audioEl);
+      this.analyser = this.audioCtx.createAnalyser();
+      this.analyser.fftSize = 128;
+      src.connect(this.analyser);
+      this.analyser.connect(this.audioCtx.destination);
+      console.log('Audio context initialized');
     } catch (e) {
-      console.error('Failed to initialize audio streamer:', e);
-      return false;
+      console.warn('Visualizer setup failed:', e);
     }
+
+    return true;
   }
 
   resumeContext() {
-    if (this.audioCtx?.state === 'suspended') this.audioCtx.resume();
+    if (this.audioCtx?.state === 'suspended') {
+      console.log('Resuming audio context');
+      this.audioCtx.resume();
+    }
   }
 
   push(arrayBuffer) {
-    if (!this.sb) {
-      console.warn('SourceBuffer not ready yet, queueing data');
-    }
-    
-    // For WAV format: only use the first chunk's header, strip headers from rest
-    if (MIME_TYPE === 'audio/wav') {
-      if (!this.headerSent && arrayBuffer.byteLength > 0) {
-        // First chunk - include full WAV data (header + audio)
-        this.queue.push(arrayBuffer);
-        this.headerSent = true;
-        console.log('Queued WAV header chunk:', arrayBuffer.byteLength, 'bytes');
-      } else if (this.headerSent) {
-        // Subsequent chunks - try to strip WAV header (first 44 bytes)
-        if (arrayBuffer.byteLength > 44) {
-          const audioData = arrayBuffer.slice(44);
-          this.queue.push(audioData);
-          console.log('Queued WAV audio data chunk:', audioData.byteLength, 'bytes (header stripped)');
-        }
-      }
-    } else {
-      // For other formats, queue as-is
-      this.queue.push(arrayBuffer);
-    }
-    
-    this._appendNext();
-  }
-
-  _appendNext() {
-    if (this.busy || this.queue.length === 0 || !this.sb || this.sb.updating) return;
-    
-    if (this.ms?.readyState !== 'open') {
-      console.warn('MediaSource not ready yet, deferring append');
+    if (!this.audio) {
+      console.warn('Audio element not ready');
       return;
     }
-
-    this.busy = true;
-    try {
-      const chunk = this.queue.shift();
-      console.log('Appending chunk:', chunk.byteLength, 'bytes');
-      this.sb.appendBuffer(chunk);
-    } catch (e) {
-      this.busy = false;
-      console.error('Failed to append buffer:', e.name, e.message);
-      
-      if (e.name === 'QuotaExceededError') {
-        this._evict();
-      } else if (e.name === 'InvalidStateError') {
-        console.error('SourceBuffer is in invalid state, skipping this chunk');
-        // Continue with next chunk
-        if (this.queue.length > 0) {
-          setTimeout(() => this._appendNext(), 50);
-        }
-      }
-    }
+    
+    this.chunks.push(new Uint8Array(arrayBuffer));
+    console.log('Queued audio chunk:', arrayBuffer.byteLength, 'bytes (total buffered:', this.chunks.reduce((a, c) => a + c.length, 0), ')');
+    this._updateAudioSource();
   }
 
-  _evict() {
-    // Remove old buffered data to prevent memory bloat
-    if (this.sb && !this.sb.updating && this.audio) {
-      const buffered = this.sb.buffered;
-      if (buffered.length > 0) {
-        const end = this.audio.currentTime - 10;
-        if (end > buffered.start(0)) {
-          this.sb.remove(buffered.start(0), end);
-        }
+  _updateAudioSource() {
+    try {
+      // Combine all chunks into one blob
+      const totalLength = this.chunks.reduce((a, c) => a + c.length, 0);
+      const combined = new Uint8Array(totalLength);
+      let offset = 0;
+      for (const chunk of this.chunks) {
+        combined.set(chunk, offset);
+        offset += chunk.length;
       }
+      
+      const blob = new Blob([combined], { type: 'audio/webm;codecs=opus' });
+      const url = URL.createObjectURL(blob);
+      
+      if (this.audio.src !== url) {
+        console.log('Updating audio source with', totalLength, 'bytes');
+        this.audio.src = url;
+      }
+    } catch (e) {
+      console.error('Error updating audio source:', e);
     }
   }
 
@@ -204,35 +119,22 @@ class AudioStreamer {
 
   destroy() {
     console.log('Destroying AudioStreamer');
-    this.queue = [];
-    this.headerSent = false;
+    this.chunks = [];
     
-    try {
-      if (this.sb && this.ms?.readyState === 'open') {
-        const buffers = this.ms.sourceBuffers;
-        while (buffers.length > 0) {
-          this.ms.removeSourceBuffer(buffers[0]);
-        }
-      }
-    } catch (e) {
-      console.error('Error removing SourceBuffer:', e);
+    if (this.audio?.src) {
+      try {
+        URL.revokeObjectURL(this.audio.src);
+      } catch {}
+      this.audio.src = '';
+      this.audio.pause();
     }
 
     try {
-      if (this.ms && this.ms.readyState !== 'closed') {
-        this.ms.endOfStream?.();
-      }
-    } catch (e) {
-      console.error('Error ending MediaSource:', e);
-    }
-
-    try { 
-      this.audioCtx?.close(); 
+      this.audioCtx?.close();
     } catch {}
 
-    this.sb = null;
-    this.ms = null;
     this.audio = null;
+    this.audioCtx = null;
   }
 }
 
