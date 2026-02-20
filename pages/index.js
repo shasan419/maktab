@@ -169,16 +169,14 @@ export default function Home() {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       console.log('AudioContext created, state:', audioCtx.state);
       
-      if (audioRef.current) {
-        const src = audioCtx.createMediaElementSource(audioRef.current);
-        const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 128;
-        src.connect(analyser);
-        analyser.connect(audioCtx.destination);
-        audioCtx.analyser = analyser;
-        audioCtxRef.current = audioCtx;
-        console.log('Audio context fully initialized with analyser');
-      }
+      // Create analyser for visualization (no HTMLAudioElement connection needed for PCM)
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 128;
+      
+      // Store analyser on context for later use
+      audioCtx.analyser = analyser;
+      audioCtxRef.current = audioCtx;
+      console.log('Audio context fully initialized');
     } catch (e) {
       console.error('Audio context setup failed:', e);
     }
