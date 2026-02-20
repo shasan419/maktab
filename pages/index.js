@@ -73,8 +73,11 @@ class AudioStreamer {
           this.busy = false;
           this._appendNext();
         });
+        this.sb.addEventListener('error', (e) => {
+          console.error('SourceBuffer error:', e);
+        });
       } catch (e) {
-        console.error('SourceBuffer error:', e);
+        console.error('SourceBuffer setup error:', e);
       }
     }, { once: true });
 
@@ -221,12 +224,20 @@ export default function Home() {
   }, []);
 
   const startPlaying = useCallback(() => {
-    initStreamer();
+    const ok = initStreamer();
+    if (!ok) {
+      console.error('Failed to initialize audio streamer');
+      setAzanState('error');
+      return;
+    }
     streamerRef.current?.resumeContext();
     if (audioRef.current) {
       audioRef.current.volume = volume / 100;
       audioRef.current.muted  = isMuted;
-      audioRef.current.play().catch(() => {});
+      audioRef.current.play().catch((err) => {
+        console.error('Audio play failed:', err);
+        setAzanState('error');
+      });
     }
     setAzanState('live');
     startVizTick();
@@ -286,8 +297,11 @@ export default function Home() {
       }
 
       // ── Binary audio chunk → push to streamer ──
-      if (e.data instanceof ArrayBuffer && streamerRef.current && azanState === 'live') {
-        streamerRef.current.push(e.data);
+      if (e.data instanceof ArrayBuffer) {
+        if (streamerRef.current) {
+          streamerRef.current.push(e.data);
+        }
+        return;
       }
     };
 
@@ -300,7 +314,7 @@ export default function Home() {
     ws.onerror = () => {
       ws.close();
     };
-  }, [startPlaying, stopPlaying, azanState]);
+  }, [startPlaying, stopPlaying]);
 
   // Mount WS connection
   useEffect(() => {
@@ -311,27 +325,6 @@ export default function Home() {
       stopPlaying();
     };
   }, []); // eslint-disable-line
-
-  // When azanState becomes 'live', wire up incoming binary chunks
-  // We do this by keeping azanState in a ref so the ws.onmessage closure can read it
-  const azanStateRef = useRef(azanState);
-  useEffect(() => { azanStateRef.current = azanState; }, [azanState]);
-
-  // Patch ws.onmessage after state updates so binary handler sees current state + streamer
-  useEffect(() => {
-    const ws = wsRef.current;
-    if (!ws) return;
-    const origOnMessage = ws.onmessage;
-    ws.onmessage = (e) => {
-      if (e.data instanceof ArrayBuffer) {
-        if (streamerRef.current && azanStateRef.current === 'live') {
-          streamerRef.current.push(e.data);
-        }
-        return;
-      }
-      origOnMessage?.(e);
-    };
-  }, [azanState]);
 
   // ── Manual listen (after user taps "Listen") ─────────────────────────────
   const handleListenClick = () => {
