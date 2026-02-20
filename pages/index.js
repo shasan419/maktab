@@ -210,6 +210,7 @@ export default function Home() {
 
   // ── Init/start audio player ──────────────────────────────────────────────
   const initStreamer = useCallback(() => {
+    if (!audioRef.current) return false;
     if (streamerRef.current) {
       streamerRef.current.destroy();
     }
