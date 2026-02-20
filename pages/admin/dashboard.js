@@ -158,48 +158,37 @@ export default function Dashboard() {
       try {
         const msg = JSON.parse(e.data);
         if (msg.type === 'ready') {
-          // Server confirmed — start MediaRecorder
-          console.log('Starting MediaRecorder with MIME type:', MIME_TYPE || 'browser default');
+          // Server confirmed — start capturing audio with Web Audio API
+          console.log('Starting raw audio capture via Web Audio API');
           
           try {
-            const options = {};
-            if (MIME_TYPE) {
-              options.mimeType = MIME_TYPE;
-            }
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioCtx.createMediaStreamSource(stream);
             
-            const recorder = new MediaRecorder(stream, options);
-            recorderRef.current = recorder;
-
-            recorder.ondataavailable = async (ev) => {
-              if (ev.data.size > 0 && ws.readyState === WebSocket.OPEN) {
-                const buf = await ev.data.arrayBuffer();
-                console.log('Broadcasting audio chunk:', buf.byteLength, 'bytes');
-                ws.send(buf);
+            // Use 4096-sample buffer = good balance between latency and efficiency
+            const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+            source.connect(processor);
+            processor.connect(audioCtx.destination);
+            
+            // Capture raw PCM audio
+            processor.onaudioprocess = (e) => {
+              if (ws.readyState === WebSocket.OPEN) {
+                const inputData = e.inputBuffer.getChannelData(0);
+                // Convert Float32 to Int16 PCM
+                const pcmData = new Int16Array(inputData.length);
+                for (let i = 0; i < inputData.length; i++) {
+                  pcmData[i] = Math.max(-1, Math.min(1, inputData[i])) * 0x7FFF;
+                }
+                ws.send(pcmData.buffer);
               }
             };
-
-            recorder.onerror = (e) => {
-              console.error('MediaRecorder error:', e.error);
-              stopBroadcast();
-            };
-
-            // Start recording WITHOUT timeslices, then manually request data
-            // This gives us more complete audio chunks that concatenate better
-            recorder.start();
-            
-            // Request data every 500ms instead of using timeslices
-            dataRequestIntervalRef.current = setInterval(() => {
-              if (recorderRef.current?.state === 'recording') {
-                recorderRef.current.requestData();
-              }
-            }, 500);
             
             startViz(stream);
             setBcastState('live');
-            console.log('Recording started successfully');
+            console.log('Raw PCM audio capture started');
           } catch (e) {
-            console.error('Failed to create MediaRecorder:', e);
-            alert('Could not start recording: ' + e.message);
+            console.error('Failed to start audio capture:', e);
+            alert('Could not start audio capture: ' + e.message);
             stopBroadcast();
           }
         }

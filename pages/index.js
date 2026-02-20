@@ -40,17 +40,18 @@ function getWsUrl() {
   return `${proto}://${window.location.host}/ws`;
 }
 
-// ── Simple audio player using blob accumulation ──────────────────────────────
+// ── Simple PCM audio player ──────────────────────────────────────────────────
 class AudioStreamer {
   constructor(audioCtx) {
-    this.chunks = [];
-    this.audio = null;
     this.audioCtx = audioCtx;
+    this.queue = [];
+    this.analyser = audioCtx?.analyser;
   }
 
   init(audioEl) {
-    this.audio = audioEl;
-    console.log('Audio streamer initialized');
+    // PCM doesn't use HTML audio element - we decode directly to AudioContext
+    console.log('PCM audio streamer initialized');
+    this.audioEl = audioEl;
     return true;
   }
 
@@ -61,100 +62,60 @@ class AudioStreamer {
     }
   }
 
-  push(arrayBuffer) {
-    if (!this.audio) {
-      console.warn('Audio element not ready');
-      return;
-    }
-    
-    this.chunks.push(new Uint8Array(arrayBuffer));
-    const total = this.chunks.reduce((a, c) => a + c.length, 0);
-    console.log('Queued chunk:', arrayBuffer.byteLength, 'bytes (total:', total, 'bytes)');
-    
-    // Only update audio source when we have a reasonable amount of data
-    // For WebM, we need at least one complete frame/cluster
-    if (total > 10000) {
-      this._updateAudioSource();
-    }
+  push(pcmBuffer) {
+    // Buffer is raw Int16 PCM data
+    this.queue.push(new Int16Array(pcmBuffer));
+    console.log('Queued PCM chunk:', pcmBuffer.byteLength, 'bytes');
+    this._processQueue();
   }
 
-  _updateAudioSource() {
-    try {
-      // For streaming audio, just use all accumulated chunks as-is
-      // This works best with continuous single-file encoding (no timeslices)
-      const totalLength = this.chunks.reduce((a, c) => a + c.length, 0);
-      const combined = new Uint8Array(totalLength);
-      let offset = 0;
-      for (const chunk of this.chunks) {
-        combined.set(chunk, offset);
-        offset += chunk.length;
+  _processQueue() {
+    if (this.queue.length === 0) return;
+    
+    // Decode queued PCM chunks into AudioBuffer
+    const totalSamples = this.queue.reduce((sum, chunk) => sum + chunk.length, 0);
+    const audioBuffer = this.audioCtx.createAudioBuffer(1, totalSamples, 48000);
+    const channelData = audioBuffer.getChannelData(0);
+    
+    let offset = 0;
+    for (const chunk of this.queue) {
+      // Convert Int16 to Float32 (-1.0 to 1.0)
+      for (let i = 0; i < chunk.length; i++) {
+        channelData[offset + i] = chunk[i] / 0x7FFF;
       }
-      
-      const blob = new Blob([combined], { type: 'audio/webm' });
-      const url = URL.createObjectURL(blob);
-      
-      // Only set src if it changed
-      if (this.audio.src !== url) {
-        console.log('Setting audio source:', totalLength, 'bytes');
-        this.audio.src = url;
-      }
-    } catch (e) {
-      console.error('Error updating audio source:', e);
+      offset += chunk.length;
     }
-  }
-
-  _updateAudioSource() {
-    try {
-      // Combine all chunks into one blob
-      const totalLength = this.chunks.reduce((a, c) => a + c.length, 0);
-      const combined = new Uint8Array(totalLength);
-      let offset = 0;
-      for (const chunk of this.chunks) {
-        combined.set(chunk, offset);
-        offset += chunk.length;
-      }
-      
-      const blob = new Blob([combined], { type: 'audio/webm;codecs=opus' });
-      const url = URL.createObjectURL(blob);
-      
-      if (this.audio.src !== url) {
-        console.log('Updating audio source with', totalLength, 'bytes');
-        this.audio.src = url;
-        
-        // Try to play if we have enough data (at least 50KB)
-        if (totalLength > 50000 && this.audio.paused) {
-          console.log('Attempting to play audio...');
-          this.audio.play().catch(err => {
-            console.warn('Autoplay blocked or failed:', err.message);
-          });
-        }
-      }
-    } catch (e) {
-      console.error('Error updating audio source:', e);
+    
+    // Play the audio buffer
+    const source = this.audioCtx.createBufferSource();
+    source.buffer = audioBuffer;
+    
+    // Apply volume from HTML audio element
+    const gain = this.audioCtx.createGain();
+    if (this.audioEl) {
+      gain.gain.value = this.audioEl.volume;
     }
+    
+    source.connect(gain);
+    gain.connect(this.analyser || this.audioCtx.destination);
+    source.start(0);
+    
+    console.log('Playing PCM buffer:', totalSamples, 'samples');
+    this.queue = [];
   }
 
   getLevel() {
-    if (!this.audioCtx?.analyser) return 0;
-    const d = new Uint8Array(this.audioCtx.analyser.frequencyBinCount);
-    this.audioCtx.analyser.getByteTimeDomainData(d);
+    if (!this.analyser) return 0;
+    const d = new Uint8Array(this.analyser.frequencyBinCount);
+    this.analyser.getByteTimeDomainData(d);
     const max = Math.max(...d.map(v => Math.abs(v - 128)));
     return Math.min(100, (max / 128) * 260);
   }
 
   destroy() {
     console.log('Destroying AudioStreamer');
-    this.chunks = [];
-    
-    if (this.audio?.src) {
-      try {
-        URL.revokeObjectURL(this.audio.src);
-      } catch {}
-      this.audio.src = '';
-      this.audio.pause();
-    }
-
-    this.audio = null;
+    this.queue = [];
+    this.audioEl = null;
   }
 }
 
