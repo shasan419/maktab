@@ -144,7 +144,7 @@ class AudioStreamer {
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function Home() {
   const [timings,      setTimings]      = useState(null);
-  const [now,          setNow]          = useState(new Date());
+  const [now,          setNow]          = useState(null);
   const [nextPrayer,   setNextPrayer]   = useState('');
 
   // Azan states: idle | connecting | live | error
@@ -164,13 +164,14 @@ export default function Home() {
 
   // ── Clock ────────────────────────────────────────────────────────────────
   useEffect(() => {
+    setNow(new Date());
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
   useEffect(() => {
     if (timings) setNextPrayer(getNextPrayer(timings));
-  }, [timings, now.getMinutes()]);
+  }, [timings, now?.getMinutes()]);
 
   // ── Fetch prayer timings ─────────────────────────────────────────────────
   useEffect(() => {
@@ -352,8 +353,8 @@ export default function Home() {
   };
 
   // ── Render ───────────────────────────────────────────────────────────────
-  const timeStr = now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-  const dateStr = now.toLocaleDateString('en-GB',  { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  const timeStr = now ? now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', second:'2-digit' }) : '--:--:--';
+  const dateStr = now ? now.toLocaleDateString('en-GB',  { weekday:'long', day:'numeric', month:'long', year:'numeric' }) : '';
   const bars    = Array.from({ length: 26 });
 
   return (
