@@ -14,7 +14,18 @@ const PRAYER_FIELDS = [
   { key:'jumuah',  label:"Jumu'ah",  arabic:'الجمعة' },
 ];
 
-const MIME_TYPE = 'audio/webm;codecs=opus';
+const MIME_TYPES = [
+  'audio/webm;codecs=opus',
+  'audio/webm',
+  'audio/mp4',
+];
+let MIME_TYPE = MIME_TYPES[0]; // default
+if (typeof window !== 'undefined' && window.MediaRecorder) {
+  MIME_TYPE = MIME_TYPES.find(m => MediaRecorder.isTypeSupported?.(m)) || MIME_TYPES[0];
+}
+if (typeof window !== 'undefined') {
+  console.log('Using MIME type for recording:', MIME_TYPE);
+}
 
 function getWsUrl() {
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
@@ -147,29 +158,44 @@ export default function Dashboard() {
         const msg = JSON.parse(e.data);
         if (msg.type === 'ready') {
           // Server confirmed — start MediaRecorder
+          console.log('Attempting to record with MIME type:', MIME_TYPE);
           if (!MediaRecorder.isTypeSupported(MIME_TYPE)) {
-            alert('This browser does not support WebM/Opus recording. Use Chrome or Firefox.');
+            console.error('MIME type not supported:', MIME_TYPE);
+            alert('This browser does not support the required audio format. Use Chrome or Firefox.');
             stopBroadcast();
             return;
           }
 
-          const recorder = new MediaRecorder(stream, {
-            mimeType: MIME_TYPE,
-            audioBitsPerSecond: 128_000,
-          });
-          recorderRef.current = recorder;
+          try {
+            const recorder = new MediaRecorder(stream, {
+              mimeType: MIME_TYPE,
+              audioBitsPerSecond: 128_000,
+            });
+            recorderRef.current = recorder;
 
-          recorder.ondataavailable = async (ev) => {
-            if (ev.data.size > 0 && ws.readyState === WebSocket.OPEN) {
-              const buf = await ev.data.arrayBuffer();
-              ws.send(buf);
-            }
-          };
+            recorder.ondataavailable = async (ev) => {
+              if (ev.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+                const buf = await ev.data.arrayBuffer();
+                console.log('Sending audio chunk:', buf.byteLength, 'bytes');
+                ws.send(buf);
+              }
+            };
 
-          // 250ms timeslice = good latency without too many messages
-          recorder.start(250);
-          startViz(stream);
-          setBcastState('live');
+            recorder.onerror = (e) => {
+              console.error('MediaRecorder error:', e.error);
+              stopBroadcast();
+            };
+
+            // 250ms timeslice = good latency without too many messages
+            recorder.start(250);
+            startViz(stream);
+            setBcastState('live');
+            console.log('Recording started');
+          } catch (e) {
+            console.error('Failed to create MediaRecorder:', e);
+            alert('Could not start recording: ' + e.message);
+            stopBroadcast();
+          }
         }
         if (msg.type === 'listener-count') {
           setListenerCnt(msg.count);

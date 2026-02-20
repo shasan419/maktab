@@ -4,7 +4,15 @@ import Link from 'next/link';
 import styles from './index.module.css';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const MIME_TYPE    = 'audio/webm;codecs=opus';
+const MIME_TYPES   = [
+  'audio/webm;codecs=opus',
+  'audio/webm',
+  'audio/mp4',
+];
+let MIME_TYPE = MIME_TYPES[0]; // default
+if (typeof window !== 'undefined' && window.MediaSource) {
+  MIME_TYPE = MIME_TYPES.find(m => MediaSource.isTypeSupported(m)) || MIME_TYPES[0];
+}
 const POLL_MS      = 4000;   // how often to check connection health
 const RETRY_MS     = 3000;   // reconnect delay after disconnect
 
@@ -107,10 +115,16 @@ class AudioStreamer {
     if (this.busy || this.queue.length === 0 || !this.sb || this.sb.updating) return;
     this.busy = true;
     try {
-      this.sb.appendBuffer(this.queue.shift());
+      const chunk = this.queue.shift();
+      this.sb.appendBuffer(chunk);
     } catch (e) {
       this.busy = false;
+      console.error('Failed to append buffer:', e.name, e.message);
       if (e.name === 'QuotaExceededError') this._evict();
+      // Continue processing queue even on error
+      if (this.queue.length > 0) {
+        setTimeout(() => this._appendNext(), 100);
+      }
     }
   }
 
