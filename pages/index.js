@@ -236,6 +236,22 @@ export default function Home() {
       return false;
     }
 
+    // Ensure AudioContext is initialized
+    if (!audioCtxRef.current) {
+      console.log('AudioContext not yet initialized, creating now...');
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 128;
+        audioCtx.analyser = analyser;
+        audioCtxRef.current = audioCtx;
+        console.log('AudioContext initialized in initStreamer');
+      } catch (e) {
+        console.error('Failed to create AudioContext:', e);
+        return false;
+      }
+    }
+
     // Destroy old streamer
     if (streamerRef.current) {
       console.log('Destroying old streamer');
@@ -246,6 +262,7 @@ export default function Home() {
     // Small delay to ensure old streamer is cleaned up
     setTimeout(() => {
       try {
+        console.log('Creating new AudioStreamer with audioCtx:', audioCtxRef.current ? 'available' : 'NOT available');
         const s = new AudioStreamer(audioCtxRef.current);
         const ok = s.init(audioRef.current);
         if (ok) {
