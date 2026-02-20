@@ -4,7 +4,6 @@ import Link from 'next/link';
 import styles from './index.module.css';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const MIME_TYPE    = 'audio/wav';
 const POLL_MS      = 4000;   // how often to check connection health
 const RETRY_MS     = 3000;   // reconnect delay after disconnect
 
@@ -47,12 +46,10 @@ class AudioStreamer {
     this.chunks = [];
     this.audio = null;
     this.audioCtx = audioCtx;
-    this.headerReceived = false;
   }
 
   init(audioEl) {
     this.audio = audioEl;
-    this.headerReceived = false;
     console.log('Audio streamer initialized');
     return true;
   }
@@ -70,27 +67,9 @@ class AudioStreamer {
       return;
     }
     
-    let data = new Uint8Array(arrayBuffer);
-    
-    // WAV format: first chunk has header (44 bytes), subsequent chunks need header stripped
-    if (MIME_TYPE === 'audio/wav') {
-      if (!this.headerReceived) {
-        // First chunk - keep all data (includes WAV header)
-        this.chunks.push(data);
-        this.headerReceived = true;
-        console.log('Queued WAV header chunk:', data.byteLength, 'bytes');
-      } else {
-        // Subsequent chunks - strip WAV header (first 44 bytes) to get only audio data
-        if (data.byteLength > 44) {
-          const audioData = data.slice(44);
-          this.chunks.push(audioData);
-          console.log('Queued WAV audio chunk:', audioData.byteLength, 'bytes (header stripped)');
-        }
-      }
-    } else {
-      this.chunks.push(data);
-    }
-    
+    this.chunks.push(new Uint8Array(arrayBuffer));
+    const total = this.chunks.reduce((a, c) => a + c.length, 0);
+    console.log('Queued chunk:', arrayBuffer.byteLength, 'bytes (total:', total, 'bytes)');
     this._updateAudioSource();
   }
 
@@ -136,7 +115,6 @@ class AudioStreamer {
   destroy() {
     console.log('Destroying AudioStreamer');
     this.chunks = [];
-    this.headerReceived = false;
     
     if (this.audio?.src) {
       try {

@@ -14,7 +14,18 @@ const PRAYER_FIELDS = [
   { key:'jumuah',  label:"Jumu'ah",  arabic:'الجمعة' },
 ];
 
-const MIME_TYPE = 'audio/wav';
+// Use default MIME type - let MediaRecorder pick what the browser supports
+let MIME_TYPE = '';
+if (typeof window !== 'undefined' && window.MediaRecorder) {
+  const supported = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'];
+  for (const type of supported) {
+    if (MediaRecorder.isTypeSupported?.(type)) {
+      MIME_TYPE = type;
+      break;
+    }
+  }
+  console.log('Using MIME type for recording:', MIME_TYPE || 'default');
+}
 
 function getWsUrl() {
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
@@ -147,12 +158,15 @@ export default function Dashboard() {
         const msg = JSON.parse(e.data);
         if (msg.type === 'ready') {
           // Server confirmed — start MediaRecorder
-          console.log('Starting MediaRecorder with MIME type:', MIME_TYPE);
+          console.log('Starting MediaRecorder with MIME type:', MIME_TYPE || 'browser default');
           
           try {
-            const recorder = new MediaRecorder(stream, {
-              mimeType: MIME_TYPE,
-            });
+            const options = {};
+            if (MIME_TYPE) {
+              options.mimeType = MIME_TYPE;
+            }
+            
+            const recorder = new MediaRecorder(stream, options);
             recorderRef.current = recorder;
 
             recorder.ondataavailable = async (ev) => {
@@ -172,7 +186,7 @@ export default function Dashboard() {
             recorder.start(250);
             startViz(stream);
             setBcastState('live');
-            console.log('Recording started successfully with', MIME_TYPE);
+            console.log('Recording started successfully');
           } catch (e) {
             console.error('Failed to create MediaRecorder:', e);
             alert('Could not start recording: ' + e.message);
