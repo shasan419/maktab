@@ -72,36 +72,45 @@ class AudioStreamer {
   _processQueue() {
     if (this.queue.length === 0) return;
     
-    // Decode queued PCM chunks into AudioBuffer
-    const totalSamples = this.queue.reduce((sum, chunk) => sum + chunk.length, 0);
-    const audioBuffer = this.audioCtx.createAudioBuffer(1, totalSamples, 48000);
-    const channelData = audioBuffer.getChannelData(0);
+    if (!this.audioCtx || !this.audioCtx.createAudioBuffer) {
+      console.error('AudioContext not available for playback');
+      return;
+    }
     
-    let offset = 0;
-    for (const chunk of this.queue) {
-      // Convert Int16 to Float32 (-1.0 to 1.0)
-      for (let i = 0; i < chunk.length; i++) {
-        channelData[offset + i] = chunk[i] / 0x7FFF;
+    try {
+      // Decode queued PCM chunks into AudioBuffer
+      const totalSamples = this.queue.reduce((sum, chunk) => sum + chunk.length, 0);
+      const audioBuffer = this.audioCtx.createAudioBuffer(1, totalSamples, 48000);
+      const channelData = audioBuffer.getChannelData(0);
+      
+      let offset = 0;
+      for (const chunk of this.queue) {
+        // Convert Int16 to Float32 (-1.0 to 1.0)
+        for (let i = 0; i < chunk.length; i++) {
+          channelData[offset + i] = chunk[i] / 0x7FFF;
+        }
+        offset += chunk.length;
       }
-      offset += chunk.length;
+      
+      // Play the audio buffer
+      const source = this.audioCtx.createBufferSource();
+      source.buffer = audioBuffer;
+      
+      // Apply volume from HTML audio element
+      const gain = this.audioCtx.createGain();
+      if (this.audioEl) {
+        gain.gain.value = this.audioEl.volume;
+      }
+      
+      source.connect(gain);
+      gain.connect(this.analyser || this.audioCtx.destination);
+      source.start(0);
+      
+      console.log('Playing PCM buffer:', totalSamples, 'samples');
+      this.queue = [];
+    } catch (e) {
+      console.error('Error playing PCM audio:', e);
     }
-    
-    // Play the audio buffer
-    const source = this.audioCtx.createBufferSource();
-    source.buffer = audioBuffer;
-    
-    // Apply volume from HTML audio element
-    const gain = this.audioCtx.createGain();
-    if (this.audioEl) {
-      gain.gain.value = this.audioEl.volume;
-    }
-    
-    source.connect(gain);
-    gain.connect(this.analyser || this.audioCtx.destination);
-    source.start(0);
-    
-    console.log('Playing PCM buffer:', totalSamples, 'samples');
-    this.queue = [];
   }
 
   getLevel() {
@@ -150,10 +159,16 @@ export default function Home() {
 
   // ── Initialize audio context once on mount ──────────────────────────────
   useEffect(() => {
-    if (typeof window === 'undefined' || audioCtxRef.current) return;
+    if (typeof window === 'undefined') return;
+    if (audioCtxRef.current) {
+      console.log('Audio context already initialized');
+      return;
+    }
 
     try {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      console.log('AudioContext created, state:', audioCtx.state);
+      
       if (audioRef.current) {
         const src = audioCtx.createMediaElementSource(audioRef.current);
         const analyser = audioCtx.createAnalyser();
@@ -162,10 +177,10 @@ export default function Home() {
         analyser.connect(audioCtx.destination);
         audioCtx.analyser = analyser;
         audioCtxRef.current = audioCtx;
-        console.log('Audio context created and ready');
+        console.log('Audio context fully initialized with analyser');
       }
     } catch (e) {
-      console.warn('Audio context setup failed:', e);
+      console.error('Audio context setup failed:', e);
     }
   }, []);
 
