@@ -14,7 +14,7 @@ const PRAYER_FIELDS = [
   { key:'jumuah',  label:"Jumu'ah",  arabic:'الجمعة' },
 ];
 
-const MIME_TYPE = 'audio/webm;codecs=opus';
+const MIME_TYPE = 'audio/wav';
 
 function getWsUrl() {
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
@@ -152,7 +152,6 @@ export default function Dashboard() {
           try {
             const recorder = new MediaRecorder(stream, {
               mimeType: MIME_TYPE,
-              audioBitsPerSecond: 128_000,
             });
             recorderRef.current = recorder;
 
@@ -173,7 +172,7 @@ export default function Dashboard() {
             recorder.start(250);
             startViz(stream);
             setBcastState('live');
-            console.log('Recording started successfully');
+            console.log('Recording started successfully with', MIME_TYPE);
           } catch (e) {
             console.error('Failed to create MediaRecorder:', e);
             alert('Could not start recording: ' + e.message);
